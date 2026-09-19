@@ -1,0 +1,17 @@
+{
+  "name": "jev-test",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Jev (TypeSafe AI) を使って「〇〇は△△か？」を判定する最小アプリ",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "mock": "JEV_MOCK=1 node server.js"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.6.0"
+  }
+}
