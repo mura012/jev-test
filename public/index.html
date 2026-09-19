@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jev 判定テスト</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #fff;
+      --text: #1f2328;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --yes: #16a34a;
+      --no: #dc2626;
+      --unsure: #d97706;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    main {
+      max-width: 640px;
+      margin: 40px auto;
+      padding: 0 16px;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; }
+    .lead { color: var(--muted); margin: 0 0 24px; font-size: 0.95rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    label { display: block; font-weight: 600; margin-bottom: 6px; }
+    .hint { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
+    input[type="text"], textarea {
+      width: 100%;
+      font: inherit;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+    }
+    input[type="text"]:focus, textarea:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: -1px;
+      border-color: transparent;
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    .criteria { display: flex; flex-direction: column; gap: 8px; }
+    .criterion { display: flex; gap: 8px; }
+    .criterion input { flex: 1; }
+    button {
+      font: inherit;
+      cursor: pointer;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 8px 14px;
+    }
+    button:hover { background: #f3f4f6; }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      padding: 10px 20px;
+      font-weight: 600;
+      width: 100%;
+      margin-top: 16px;
+    }
+    button.primary:hover { background: #1d4ed8; }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .remove { color: var(--muted); padding: 8px 10px; }
+    .add { margin-top: 10px; }
+    .status {
+      font-size: 0.85rem;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .status.warn { background: #fef3c7; color: #92400e; }
+    .status.ok { background: #dcfce7; color: #166534; }
+    .error { color: var(--no); margin-top: 12px; white-space: pre-wrap; }
+    .result {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .result:last-child { border-bottom: none; }
+    .result .q { font-weight: 600; }
+    .result .verdict { font-weight: 700; text-align: right; white-space: nowrap; }
+    .verdict.yes { color: var(--yes); }
+    .verdict.no { color: var(--no); }
+    .verdict.unsure { color: var(--unsure); }
+    .bar {
+      grid-column: 1 / -1;
+      height: 8px;
+      border-radius: 4px;
+      background: #eef0f3;
+      overflow: hidden;
+    }
+    .bar > span { display: block; height: 100%; }
+    .bar.yes > span { background: var(--yes); }
+    .bar.no > span { background: var(--no); }
+    .bar.unsure > span { background: var(--unsure); }
+    .meta { color: var(--muted); font-size: 0.8rem; margin-top: 12px; }
+    #results:empty { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Jev 判定テスト</h1>
+    <p class="lead">「〇〇」を入力し、それが「△△か？」を Jev（TypeSafe AI）に yes/no の確率で判定させます。</p>
+
+    <div id="status" class="status" hidden></div>
+
+    <form id="form" class="card">
+      <label for="target">〇〇（判定したい対象）</label>
+      <p class="hint">単語でも文章でも OK。例: 「りんご」「昨日届いた商品が壊れていました。返金してほしいです。」</p>
+      <textarea id="target" name="target" placeholder="ここに入力"></textarea>
+
+      <label style="margin-top: 20px;">判定するもの（△△）</label>
+      <p class="hint">「〇〇は△△か？」の △△ を入力。末尾に「？」を付ければ質問文そのままでも判定できます（例: 「返金を求めているか？」）。</p>
+      <div id="criteria" class="criteria"></div>
+      <button type="button" id="add" class="add">+ 項目を追加</button>
+
+      <button type="submit" id="submit" class="primary">判定する</button>
+      <div id="error" class="error"></div>
+    </form>
+
+    <div id="results" class="card"></div>
+  </main>
+
+  <script>
+    const criteriaEl = document.getElementById("criteria");
+    const resultsEl = document.getElementById("results");
+    const errorEl = document.getElementById("error");
+    const statusEl = document.getElementById("status");
+    const submitBtn = document.getElementById("submit");
+
+    function addCriterion(value = "") {
+      const row = document.createElement("div");
+      row.className = "criterion";
+      row.innerHTML = `
+        <input type="text" placeholder="例: 果物" value="${value.replace(/"/g, "&quot;")}" />
+        <button type="button" class="remove" title="削除">✕</button>
+      `;
+      row.querySelector(".remove").addEventListener("click", () => {
+        if (criteriaEl.children.length > 1) row.remove();
+        else row.querySelector("input").value = "";
+      });
+      criteriaEl.appendChild(row);
+      return row.querySelector("input");
+    }
+
+    document.getElementById("add").addEventListener("click", () => addCriterion().focus());
+
+    ["果物", "赤い", "野菜"].forEach(addCriterion);
+    document.getElementById("target").value = "りんご";
+
+    fetch("/api/status")
+      .then((r) => r.json())
+      .then(({ mock, hasApiKey }) => {
+        statusEl.hidden = false;
+        if (mock) {
+          statusEl.className = "status warn";
+          statusEl.textContent = "モックモードで動作中（JEV_MOCK=1）。結果はランダムで、Jev API は呼びません。";
+        } else if (!hasApiKey) {
+          statusEl.className = "status warn";
+          statusEl.textContent = "TYPESAFE_API_KEY が未設定です。.env にキーを設定してサーバーを再起動してください。";
+        } else {
+          statusEl.className = "status ok";
+          statusEl.textContent = "API キー設定済み。Jev に問い合わせます。";
+        }
+      })
+      .catch(() => {});
+
+    document.getElementById("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorEl.textContent = "";
+      resultsEl.innerHTML = "";
+
+      const target = document.getElementById("target").value;
+      const criteria = [...criteriaEl.querySelectorAll("input")]
+        .map((i) => i.value.trim())
+        .filter(Boolean);
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "判定中…";
+      try {
+        const res = await fetch("/api/judge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target, criteria }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        render(target, data);
+      } catch (err) {
+        errorEl.textContent = err.message;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "判定する";
+      }
+    });
+
+    function render(target, { results, model, usage }) {
+      for (const { criterion, probability } of results) {
+        const p = Math.round(probability * 100);
+        const cls = probability >= 0.7 ? "yes" : probability <= 0.3 ? "no" : "unsure";
+        const label = cls === "yes" ? "はい" : cls === "no" ? "いいえ" : "不明";
+        const row = document.createElement("div");
+        row.className = "result";
+        row.innerHTML = `
+          <div class="q"></div>
+          <div class="verdict ${cls}">${label} <span style="font-weight:400">(${p}%)</span></div>
+          <div class="bar ${cls}"><span style="width:${p}%"></span></div>
+        `;
+        row.querySelector(".q").textContent = /[?？]$/.test(criterion)
+          ? criterion
+          : `「${target}」は「${criterion}」か？`;
+        resultsEl.appendChild(row);
+      }
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = `model: ${model} / input ${usage.input_tokens} tokens, output ${usage.output_tokens} tokens`;
+      resultsEl.appendChild(meta);
+    }
+  </script>
+</body>
+</html>
